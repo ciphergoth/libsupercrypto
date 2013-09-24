@@ -1,0 +1,54 @@
+#!/usr/bin/env python2.7
+
+from fabricate import *
+import os
+import os.path
+
+def makedirs(d):
+    if not os.path.isdir(d):
+        os.makedirs(d)
+
+class Primitive(object):
+    def spath(self):
+        return os.path.join(
+            self._ptype,
+            self._cipher,
+            self._implementation)
+
+    def target_dir(self, *args):
+        return os.path.join("target", self.spath(), *args)
+
+    def source_dir(self, *args):
+        return os.path.join("fetched/supercop-20130419", self.spath(), *args)
+
+    def write_header(self):
+        include_dir = self.target_dir("include")
+        makedirs(include_dir)
+        with open(os.path.join(include_dir, self._ptype + ".h"), "w") as f:
+            f.write("\n")
+        return include_dir
+
+    def build(self):
+        inc = self.write_header()
+        obj = os.path.join(self.target_dir(), "obj")
+        makedirs(obj)
+        for name in self._cfiles:
+            run("cc", "-fpic", "-Wall",
+                "-I", inc,
+                "-c",
+                "-o",  os.path.join(obj, name + ".o"),
+                self.source_dir(name + ".c"))
+
+class Chacha(Primitive):
+    _ptype = "crypto_stream"
+    _cipher = "chacha12"
+    _implementation = "krovetz"
+    _cfiles = ["stream"]
+
+#cc -fpic -Wall -shared -Wl,-soname,libbletchleyprimitives.so.1 -o libbletchleyprimitives.so -I . supercop/crypto_stream/chacha12/krovetz/stream.c 
+
+def build():
+    Chacha().build()
+
+if __name__ == "__main__":
+    main()
