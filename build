@@ -43,11 +43,11 @@ class Primitive(object):
         for name in self._cfiles:
             yield os.path.join(self.target_dir(), "obj", name + ".o")
 
-class Chacha(Primitive):
-    _ptype = "crypto_stream"
-    _cipher = "chacha12"
-    _implementation = "krovetz"
-    _cfiles = ["stream"]
+class SalsaCore(Primitive):
+    _ptype = "crypto_core"
+    _cipher = "salsa20"
+    _implementation = "ref"
+    _cfiles = ["core"]
 
 #cc -fpic -Wall -shared -Wl,-soname,libbletchleyprimitives.so.1 -o libbletchleyprimitives.so -I . supercop/crypto_stream/chacha12/krovetz/stream.c
 
@@ -57,7 +57,7 @@ def _gather_objfiles(primitives):
             yield o
 
 def build_so():
-    primitives = [Chacha()]
+    primitives = [SalsaCore()]
     for primitive in primitives:
         primitive.build()
     makedirs("target/lib")
@@ -66,6 +66,7 @@ def build_so():
         *list(_gather_objfiles(primitives)))
     run("ldconfig", "-n", "target/lib")
     # Is this really correct?
+    os.unlink("target/lib/libbletchleyprimitives.so")
     os.symlink("libbletchleyprimitives.so.1.0.1",
         "target/lib/libbletchleyprimitives.so")
 

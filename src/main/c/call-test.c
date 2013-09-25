@@ -1,14 +1,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CSIZE (50)
+#define CRYPTO_OUTPUTBYTES 64
+#define CRYPTO_INPUTBYTES 16
+#define CRYPTO_KEYBYTES 32
+#define CRYPTO_CONSTBYTES 16
 
-extern int crypto_stream_xor(
+extern int crypto_core(
         unsigned char *out,
-        const unsigned char *in,
-        unsigned long long inlen,
-        const unsigned char *n,
-        const unsigned char *k
+  const unsigned char *in,
+  const unsigned char *k,
+  const unsigned char *c
 );
 
 
@@ -16,16 +18,16 @@ int main(
     int argc,
     const char *argv[]
 ) {
-    unsigned char key[32];
-    unsigned char nonce[8];
-    unsigned char toencrypt[CSIZE];
-    unsigned char output[CSIZE];
+    unsigned char sigma[CRYPTO_CONSTBYTES] = "expand 32-byte k";
+    unsigned char key[CRYPTO_KEYBYTES];
+    unsigned char input[CRYPTO_INPUTBYTES];
+    unsigned char output[CRYPTO_OUTPUTBYTES];
 
-    memset(key, 0, 32);
-    memset(nonce, 0, 8);
-    memset(toencrypt, 0, CSIZE);
-    crypto_stream_xor(output, toencrypt, CSIZE, nonce, key);
-    for (int i = 0; i < CSIZE; i++) {
+    memset(key, 0, CRYPTO_KEYBYTES);
+    memset(input, 0, CRYPTO_INPUTBYTES);
+    key[0] = 0x80;
+    crypto_core(output, input, key, sigma);
+    for (int i = 0; i < CRYPTO_OUTPUTBYTES; i++) {
         printf("%02x ", output[i]);
     }
     printf("\n");

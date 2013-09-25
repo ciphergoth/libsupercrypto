@@ -5,12 +5,11 @@ import cffi
 ffi = cffi.FFI()
 
 ffi.cdef("""
-int crypto_stream_xor(
+extern int crypto_core(
         unsigned char *out,
-        const unsigned char *in,
-        unsigned long long inlen,
-        const unsigned char *n,
-        const unsigned char *k
+  const unsigned char *in,
+  const unsigned char *k,
+  const unsigned char *c
 );
 """)
 
@@ -20,9 +19,9 @@ int crypto_stream_xor(
 
 
 blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")
-key = ffi.new("unsigned char[]", 32)
-nonce = ffi.new("unsigned char[]", 8)
-toencrypt = ffi.new("unsigned char[]", 50)
-output = ffi.new("unsigned char[]", 50)
-print output
-blib.crypto_stream_xor(output, toencrypt, 50, nonce, key)
+key = ffi.new("unsigned char[]", [0x80] + 31*[0])
+inpt = ffi.new("unsigned char[]", 32*[0])
+sigma = ffi.new("unsigned char[]", "expand 32-byte k")
+output = ffi.new("unsigned char[]", 64)
+blib.crypto_core(output, inpt, key, sigma);
+print " ".join(["%02x" % b for b in output])
