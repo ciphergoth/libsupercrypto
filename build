@@ -56,13 +56,34 @@ def _gather_objfiles(primitives):
         for o in primitive.object_files():
             yield o
 
-def build():
+def build_so():
     primitives = [Chacha()]
     for primitive in primitives:
         primitive.build()
+    makedirs("target/lib")
     run("cc", "-shared", "-Wl,-soname,libbletchleyprimitives.so.1",
-        "-o", "target/libbletchleyprimitives.so",
+        "-o", "target/lib/libbletchleyprimitives.so.1.0.1",
         *list(_gather_objfiles(primitives)))
+    run("ldconfig", "-n", "target/lib")
+    # Is this really correct?
+    os.symlink("libbletchleyprimitives.so.1.0.1",
+        "target/lib/libbletchleyprimitives.so")
+
+def build_c_test():
+    makedirs("target/obj")
+    run("cc", "-Wall", "-std=c99",
+        "-o", "target/obj/call-test.o",
+        "-c", "src/main/c/call-test.c")
+    makedirs("target/exe")
+    run("cc",
+        "-o", "target/exe/call-test",
+        "target/obj/call-test.o",
+        "-L", "target/lib",
+        "-lbletchleyprimitives")
+
+def build():
+    build_so()
+    build_c_test()
 
 if __name__ == "__main__":
     main()

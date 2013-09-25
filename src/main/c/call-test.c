@@ -23,7 +23,7 @@ int main(
 
     memset(key, 0, 32);
     memset(nonce, 0, 8);
-    memset(toencrypt, 0, CSIZE);    
+    memset(toencrypt, 0, CSIZE);
     crypto_stream_xor(output, toencrypt, CSIZE, nonce, key);
     for (int i = 0; i < CSIZE; i++) {
         printf("%02x ", output[i]);
@@ -31,4 +31,3 @@ int main(
     printf("\n");
     return 0;
 }
-
