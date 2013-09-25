@@ -1,12 +1,62 @@
 #!/usr/bin/env python2.7
 
-from fabricate import *
 import os
 import os.path
+import re
+
+from fabricate import *
 
 def makedirs(d):
     if not os.path.isdir(d):
         os.makedirs(d)
+
+def read_operations():
+    with open("fetched/supercop-20130419/OPERATIONS") as f:
+        for l in f:
+            op, macros, prototypes = l.strip().split(None, 2)
+            macros = macros.split(':')
+            prototypes = prototypes.split(':')
+            yield (op, dict(macros=macros, prototypes=prototypes))
+
+operations = dict(read_operations())
+
+o_header = """
+#ifndef {o}_H
+#define {o}_H
+
+#include "{op}.h"
+
+{o_macros}
+
+#endif
+"""
+
+op_header = """
+#ifndef {op}_H
+#define {op}_H
+
+{apisubst}
+#ifdef __cplusplus
+extern "C" {{
+#endif
+{prototypes}
+#ifdef __cplusplus
+}}
+#endif
+
+{op_macros}
+#define {op}_IMPLEMENTATION "{o}/{p}/{i}"
+#ifndef {opi}_VERSION
+#define {opi}_VERSION "-"
+#endif
+#define {op}_VERSION {opi}_VERSION
+
+#endif
+"""
+
+o_macro = "#define {o}{macro} {op}{macro}"
+op_macro = "#define {op}{macro} {opi}{macro}"
+protot = "extern int {op}{prototype};"
 
 class Primitive(object):
     def spath(self):
@@ -21,15 +71,40 @@ class Primitive(object):
     def source_dir(self, *args):
         return os.path.join("fetched/supercop-20130419", self.spath(), *args)
 
-    def write_header(self):
+    def api(self):
+        with open(self.source_dir("api.h")) as f:
+            return f.read()
+
+    def write_headers(self):
         include_dir = self.target_dir("include")
         makedirs(include_dir)
-        with open(os.path.join(include_dir, self._ptype + ".h"), "w") as f:
-            f.write("\n")
+        substitutions = dict(
+            o=self._ptype,
+            p=self._cipher,
+            i=self._implementation)
+        substitutions["op"] = "{o}_{p}".format(**substitutions)
+        substitutions["opi"] = "{op}_{i}".format(**substitutions)
+        substitutions["o_macros"] = "\n".join(
+            o_macro.format(**dict(substitutions, macro=macro))
+            for macro in operations[self._ptype]["macros"])
+        substitutions["op_macros"] = "\n".join(
+            op_macro.format(**dict(substitutions, macro=macro))
+            for macro in operations[self._ptype]["macros"])
+        substitutions["apisubst"] = re.sub(
+            r"\wCRYPTO_",
+            " {opi}_".format(**substitutions),
+            self.api())
+        substitutions["prototypes"] = "\n".join(
+            protot.format(**dict(substitutions, prototype=prototype))
+            for prototype in operations[self._ptype]["prototypes"])
+        with open(os.path.join(include_dir, "{o}.h".format(**substitutions)), "w") as f:
+            f.write(o_header.format(**substitutions))
+        with open(os.path.join(include_dir, "{op}.h".format(**substitutions)), "w") as f:
+            f.write(op_header.format(**substitutions))
         return include_dir
 
     def build(self):
-        inc = self.write_header()
+        inc = self.write_headers()
         obj = os.path.join(self.target_dir(), "obj")
         makedirs(obj)
         for name in self._cfiles:
@@ -42,6 +117,8 @@ class Primitive(object):
     def object_files(self):
         for name in self._cfiles:
             yield os.path.join(self.target_dir(), "obj", name + ".o")
+
+
 
 class SalsaCore(Primitive):
     _ptype = "crypto_core"
