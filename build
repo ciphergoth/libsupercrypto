@@ -25,10 +25,11 @@ o_header = """#ifndef {o}_H
 
 #include "{op}.h"
 
+{op_macros}
+
 {o_macros}
 #define {o}_PRIMITIVE "{p}"
 #define {o}_IMPLEMENTATION {op}_IMPLEMENTATION
-#define {o}_VERSION {op}_VERSION
 
 #endif
 """
@@ -45,19 +46,13 @@ extern "C" {{
 }}
 #endif
 
-{op_macros}
 #define {op}_IMPLEMENTATION "{o}/{p}/{i}"
-#ifndef {opi}_VERSION
-#define {opi}_VERSION "-"
+#ifndef {op}_VERSION
+#define {op}_VERSION "-"
 #endif
-#define {op}_VERSION {opi}_VERSION
 
 #endif
 """
-
-o_macro = "#define {o}{macro} {op}{macro}"
-op_macro = "#define {op}{macro} {opi}{macro}"
-protot = "extern int {opi}{prototype};"
 
 class Primitive(object):
     def spath(self):
@@ -72,9 +67,17 @@ class Primitive(object):
     def source_dir(self, *args):
         return os.path.join("fetched/supercop-20130419", self.spath(), *args)
 
+    def ops(self, entry):
+        return operations[self._ptype][entry]
+
     def api(self):
         with open(self.source_dir("api.h")) as f:
             return f.read()
+
+    def add_macro(self, substitutions, name, template):
+        substitutions[name] = "\n".join(
+            template.format(**dict(substitutions, macro=macro))
+            for macro in self.ops("macros")+["_VERSION"])
 
     def write_headers(self):
         include_dir = self.target_dir("include")
@@ -85,18 +88,17 @@ class Primitive(object):
             i=self._implementation)
         substitutions["op"] = "{o}_{p}".format(**substitutions)
         substitutions["opi"] = "{op}_{i}".format(**substitutions)
-        substitutions["o_macros"] = "\n".join(
-            o_macro.format(**dict(substitutions, macro=macro))
-            for macro in operations[self._ptype]["macros"])
-        substitutions["op_macros"] = "\n".join(
-            op_macro.format(**dict(substitutions, macro=macro))
-            for macro in operations[self._ptype]["macros"])
+        self.add_macro(substitutions, "o_macros", 
+            "#define {o}{macro} {op}{macro}")
+        self.add_macro(substitutions, "op_macros", 
+            "#define {opi}{macro} {op}{macro}")
         substitutions["apisubst"] = re.sub(
             r"\sCRYPTO_",
-            " {opi}_".format(**substitutions),
+            " {op}_".format(**substitutions),
             self.api().strip())
         substitutions["prototypes"] = "\n".join(
-            protot.format(**dict(substitutions, prototype=prototype))
+            "extern int {op}{prototype};".format(
+                **dict(substitutions, prototype=prototype))
             for prototype in operations[self._ptype]["prototypes"])
         with open(os.path.join(include_dir, "{o}.h".format(**substitutions)), "w") as f:
             f.write(o_header.format(**substitutions))

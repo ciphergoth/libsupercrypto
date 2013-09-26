@@ -5,7 +5,7 @@ import cffi
 ffi = cffi.FFI()
 
 ffi.cdef("""
-extern int crypto_core_salsa20_ref(
+extern int crypto_core_salsa20(
         unsigned char *out,
   const unsigned char *in,
   const unsigned char *k,
@@ -23,5 +23,5 @@ key = ffi.new("unsigned char[]", [0x80] + 31*[0])
 inpt = ffi.new("unsigned char[]", 32*[0])
 sigma = ffi.new("unsigned char[]", "expand 32-byte k")
 output = ffi.new("unsigned char[]", 64)
-blib.crypto_core_salsa20_ref(output, inpt, key, sigma);
+blib.crypto_core_salsa20(output, inpt, key, sigma);
 print " ".join(["%02x" % b for b in output])

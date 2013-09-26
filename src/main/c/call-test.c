@@ -26,7 +26,7 @@ int main(
     memset(key, 0, CRYPTO_KEYBYTES);
     memset(input, 0, CRYPTO_INPUTBYTES);
     key[0] = 0x80;
-    crypto_core_salsa20_ref(output, input, key, sigma);
+    crypto_core_salsa20(output, input, key, sigma);
     for (int i = 0; i < CRYPTO_OUTPUTBYTES; i++) {
         printf("%02x ", output[i]);
     }
