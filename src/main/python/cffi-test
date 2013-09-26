@@ -4,21 +4,11 @@ import cffi
 
 ffi = cffi.FFI()
 
-ffi.cdef("""
-extern int crypto_core_salsa20(
-        unsigned char *out,
-  const unsigned char *in,
-  const unsigned char *k,
-  const unsigned char *c
-);
-""")
-
-#ffi.cdef("""
-#       void *memset(void *s, int c, size_t n);
-#""")
-
+with open("target/crypto_core/salsa20/ref/include/cffi_crypto_core_salsa20.h") as f:
+    ffi.cdef(f.read())
 
 blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")
+print blib.cffi_crypto_core_salsa20_OUTPUTBYTES
 key = ffi.new("unsigned char[]", [0x80] + 31*[0])
 inpt = ffi.new("unsigned char[]", 32*[0])
 sigma = ffi.new("unsigned char[]", "expand 32-byte k")
