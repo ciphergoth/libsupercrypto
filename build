@@ -20,19 +20,20 @@ def read_operations():
 
 operations = dict(read_operations())
 
-o_header = """
-#ifndef {o}_H
+o_header = """#ifndef {o}_H
 #define {o}_H
 
 #include "{op}.h"
 
 {o_macros}
+#define {o}_PRIMITIVE "{p}"
+#define {o}_IMPLEMENTATION {op}_IMPLEMENTATION
+#define {o}_VERSION {op}_VERSION
 
 #endif
 """
 
-op_header = """
-#ifndef {op}_H
+op_header = """#ifndef {op}_H
 #define {op}_H
 
 {apisubst}
@@ -56,7 +57,7 @@ extern "C" {{
 
 o_macro = "#define {o}{macro} {op}{macro}"
 op_macro = "#define {op}{macro} {opi}{macro}"
-protot = "extern int {op}{prototype};"
+protot = "extern int {opi}{prototype};"
 
 class Primitive(object):
     def spath(self):
@@ -93,7 +94,7 @@ class Primitive(object):
         substitutions["apisubst"] = re.sub(
             r"\wCRYPTO_",
             " {opi}_".format(**substitutions),
-            self.api())
+            self.api().strip())
         substitutions["prototypes"] = "\n".join(
             protot.format(**dict(substitutions, prototype=prototype))
             for prototype in operations[self._ptype]["prototypes"])
