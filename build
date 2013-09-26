@@ -56,6 +56,9 @@ extern "C" {{
 
 cffi_op_header = """
 {cffi_declarations}
+extern char *cffi_{op}_IMPLEMENTATION;
+extern char *cffi_{op}_VERSION;
+
 {prototypes}
 """
 
@@ -64,6 +67,8 @@ cffi_constants = """
 #include "cffi_{op}.h"
 
 {cffi_definitions}
+char *cffi_{op}_IMPLEMENTATION = {op}_IMPLEMENTATION;
+char *cffi_{op}_VERSION = {op}_VERSION;
 """
 
 class Primitive(object):

@@ -9,6 +9,8 @@ with open("target/crypto_core/salsa20/ref/include/cffi_crypto_core_salsa20.h") a
 
 blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")
 print blib.cffi_crypto_core_salsa20_OUTPUTBYTES
+print ffi.string(blib.cffi_crypto_core_salsa20_IMPLEMENTATION)
+print ffi.string(blib.cffi_crypto_core_salsa20_VERSION)
 key = ffi.new("unsigned char[]", [0x80] + 31*[0])
 inpt = ffi.new("unsigned char[]", 32*[0])
 sigma = ffi.new("unsigned char[]", "expand 32-byte k")
