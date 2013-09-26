@@ -82,6 +82,23 @@ def write_template(d, namepattern, template, substitutions):
     with open(name, "w") as f:
         f.write(template.format(**substitutions))
 
+class CState(object):
+    def __init__(self):
+        self._includes = []
+        self._objfiles = []
+
+    def add_include(self, i):
+        self._includes.append(i)
+
+    def compile_c(self, objfile, source):
+        run("cc", "-fpic", "-Wall", '-std=gnu99',
+            [['-I', i] for i in self._includes],
+            "-o", objfile,
+            "-c", source)
+        self._objfiles.append(objfile)
+
+    def objfiles(self):
+        return self._objfiles
 
 class Primitive(object):
     def __init__(self, operation, primitive, implementation):
@@ -151,11 +168,8 @@ class Primitive(object):
         self.write_template("c", "cffi_constants.c",
             cffi_constants, substitutions)
 
-    def compile_c(self, name, source, includes):
-        run("cc", "-fpic", "-Wall",
-            [['-I', i] for i in includes],
-            "-o", self.target_dir("obj", name + ".o"),
-            "-c", source)
+    def compile_c(self, cstate, name, source):
+        cstate.compile_c(self.target_dir("obj", name + ".o"), source)
 
     def unsorted_cfiles(self):
         for fname in os.listdir(self.source_dir()):
@@ -166,24 +180,15 @@ class Primitive(object):
     def cfiles(self):
         return sorted(list(self.unsorted_cfiles()))
 
-    def build(self, includes):
-        includes.append(self.target_dir("include"))
+    def build(self, cstate):
+        cstate.add_include(self.target_dir("include"))
         self.write_templates()
         obj = self.target_dir("obj")
         makedirs(obj)
         for name in self.cfiles():
-            self.compile_c(name, self.source_dir(name + ".c"), includes)
-        self.compile_c("cffi_constants",
-            self.target_dir("c", "cffi_constants.c"), includes)
-
-    def object_files(self):
-        for name in self.cfiles() + ["cffi_constants"]:
-            yield self.target_dir("obj", name + ".o")
-
-def _gather_objfiles(primitives):
-    for primitive in primitives:
-        for o in primitive.object_files():
-            yield o
+            self.compile_c(cstate, name, self.source_dir(name + ".c"))
+        self.compile_c(cstate, "cffi_constants",
+            self.target_dir("c", "cffi_constants.c"))
 
 primitives = [
     Primitive("crypto_core", "salsa20", "ref"),
@@ -208,27 +213,29 @@ def build_so():
         for s in ['', 'u']:
             write_template("target/include", "crypto_{n}.h",
                 int_template, dict(n="{}int{}".format(s, size)))
-    includes = [source_path("include"), "target/include"]
+    cstate = CState()
+    cstate.add_include("src/main/include")
+    cstate.add_include(source_path("include"))
+    cstate.add_include("target/include")
+    makedirs("target/obj")
+    cstate.compile_c("target/obj/randombytes.o", "src/main/c/randombytes.c")
     for primitive in primitives:
-        primitive.build(includes)
+        primitive.build(cstate)
     makedirs("target/lib")
     run("cc", "-shared", "-Wl,-soname,libbletchleyprimitives.so.1",
         "-o", "target/lib/libbletchleyprimitives.so.1.0.1",
-        *list(_gather_objfiles(primitives)))
+        *cstate.objfiles())
     run("ldconfig", "-n", "target/lib")
     # Is this really correct?
     if os.path.exists("target/lib/libbletchleyprimitives.so"):
         os.unlink("target/lib/libbletchleyprimitives.so")
     os.symlink("libbletchleyprimitives.so.1.0.1",
         "target/lib/libbletchleyprimitives.so")
-    return includes
+    return cstate
 
-def build_c_test(includes):
+def build_c_test(cstate):
     makedirs("target/obj")
-    run("cc", "-Wall", "-std=c99",
-        "-o", "target/obj/call-test.o",
-        [['-I', i] for i in includes],
-        "-c", "src/main/c/call-test.c")
+    cstate.compile_c("target/obj/call-test.o", "src/test/c/call-test.c")
     makedirs("target/exe")
     run("cc",
         "-o", "target/exe/call-test",
@@ -237,8 +244,8 @@ def build_c_test(includes):
         "-lbletchleyprimitives")
 
 def build():
-    includes = build_so()
-    build_c_test(includes)
+    cstate = build_so()
+    build_c_test(cstate)
 
 if __name__ == "__main__":
     main()
