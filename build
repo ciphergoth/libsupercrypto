@@ -92,7 +92,7 @@ class Primitive(object):
             op_macro.format(**dict(substitutions, macro=macro))
             for macro in operations[self._ptype]["macros"])
         substitutions["apisubst"] = re.sub(
-            r"\wCRYPTO_",
+            r"\sCRYPTO_",
             " {opi}_".format(**substitutions),
             self.api().strip())
         substitutions["prototypes"] = "\n".join(
