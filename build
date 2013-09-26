@@ -10,13 +10,16 @@ def makedirs(d):
     if not os.path.isdir(d):
         os.makedirs(d)
 
+def source_path(*args):
+    return os.path.join("fetched/supercop-20130419", *args)
+
 def read_operations():
-    with open("fetched/supercop-20130419/OPERATIONS") as f:
+    with open(source_path("OPERATIONS")) as f:
         for l in f:
             op, macros, prototypes = l.strip().split(None, 2)
-            macros = macros.split(':')
-            prototypes = prototypes.split(':')
-            yield (op, dict(macros=macros, prototypes=prototypes))
+            yield (op, dict(
+                macros=macros.split(':'),
+                prototypes=prototypes.split(':')))
 
 operations = dict(read_operations())
 
@@ -71,21 +74,35 @@ char *cffi_{op}_IMPLEMENTATION = {op}_IMPLEMENTATION;
 char *cffi_{op}_VERSION = {op}_VERSION;
 """
 
+def write_template(d, namepattern, template, substitutions):
+    makedirs(d)
+    name = os.path.join(d,
+        namepattern.format(**substitutions))
+    print "Writing", name
+    with open(name, "w") as f:
+        f.write(template.format(**substitutions))
+
+
 class Primitive(object):
+    def __init__(self, operation, primitive, implementation):
+        self._operation = operation
+        self._primitive = primitive
+        self._implementation = implementation
+
     def spath(self):
         return os.path.join(
-            self._ptype,
-            self._cipher,
+            self._operation,
+            self._primitive,
             self._implementation)
 
     def target_dir(self, *args):
         return os.path.join("target", self.spath(), *args)
 
     def source_dir(self, *args):
-        return os.path.join("fetched/supercop-20130419", self.spath(), *args)
+        return source_path(self.spath(), *args)
 
     def ops(self, entry):
-        return operations[self._ptype][entry]
+        return operations[self._operation][entry]
 
     def api(self):
         with open(self.source_dir("api.h")) as f:
@@ -97,17 +114,13 @@ class Primitive(object):
             for macro in macros)
 
     def write_template(self, d, namepattern, template, substitutions):
-        makedirs(self.target_dir(d))
-        name = self.target_dir(d,
-            namepattern.format(**substitutions))
-        print "Writing", name
-        with open(name, "w") as f:
-            f.write(template.format(**substitutions))
+        write_template(self.target_dir(d),
+            namepattern, template, substitutions)
 
     def write_templates(self):
         substitutions = dict(
-            o=self._ptype,
-            p=self._cipher,
+            o=self._operation,
+            p=self._primitive,
             i=self._implementation)
         substitutions["op"] = "{o}_{p}".format(**substitutions)
         substitutions["opi"] = "{op}_{i}".format(**substitutions)
@@ -129,52 +142,75 @@ class Primitive(object):
             "extern int {op}{prototype};".format(
                 **dict(substitutions, prototype=prototype))
             for prototype in self.ops("prototypes"))
-        self.write_template("include",
-            "{o}.h", o_header, substitutions)
-        self.write_template("include",
-            "{op}.h", op_header, substitutions)
-        self.write_template("include",
-            "cffi_{op}.h", cffi_op_header, substitutions)
-        self.write_template("c",
-            "cffi_constants.c", cffi_constants, substitutions)
+        self.write_template("include", "{o}.h",
+            o_header, substitutions)
+        self.write_template("include", "{op}.h",
+            op_header, substitutions)
+        self.write_template("include", "cffi_{op}.h",
+            cffi_op_header, substitutions)
+        self.write_template("c", "cffi_constants.c",
+            cffi_constants, substitutions)
 
-    def compile_c(self, name, source):
+    def compile_c(self, name, source, includes):
         run("cc", "-fpic", "-Wall",
-            "-I", self.target_dir("include"),
-            "-c",
-            "-o",  self.target_dir("obj", name + ".o"), source)
+            [['-I', i] for i in includes],
+            "-o", self.target_dir("obj", name + ".o"),
+            "-c", source)
 
-    def build(self):
+    def unsorted_cfiles(self):
+        for fname in os.listdir(self.source_dir()):
+            m = re.match(r"(.+)\.c", fname)
+            if m is not None:
+                yield m.group(1)
+
+    def cfiles(self):
+        return sorted(list(self.unsorted_cfiles()))
+
+    def build(self, includes):
+        includes.append(self.target_dir("include"))
         self.write_templates()
         obj = self.target_dir("obj")
         makedirs(obj)
-        for name in self._cfiles:
-            self.compile_c(name, self.source_dir(name + ".c"))
+        for name in self.cfiles():
+            self.compile_c(name, self.source_dir(name + ".c"), includes)
         self.compile_c("cffi_constants",
-            self.target_dir("c", "cffi_constants.c"))
+            self.target_dir("c", "cffi_constants.c"), includes)
 
     def object_files(self):
-        for name in self._cfiles + ["cffi_constants"]:
+        for name in self.cfiles() + ["cffi_constants"]:
             yield self.target_dir("obj", name + ".o")
-
-class SalsaCore(Primitive):
-    _ptype = "crypto_core"
-    _cipher = "salsa20"
-    _implementation = "ref"
-    _cfiles = ["core"]
-
-#cc -fpic -Wall -shared -Wl,-soname,libbletchleyprimitives.so.1 -o libbletchleyprimitives.so -I . supercop/crypto_stream/chacha12/krovetz/stream.c
 
 def _gather_objfiles(primitives):
     for primitive in primitives:
         for o in primitive.object_files():
             yield o
 
-primitives = [SalsaCore()]
+primitives = [
+    Primitive("crypto_core", "salsa20", "ref"),
+    Primitive("crypto_verify", "32", "ref"),
+    Primitive("crypto_hashblocks", "sha512", "ref"),
+    Primitive("crypto_hash", "sha512", "ref"),
+    Primitive("crypto_sign", "ed25519", "ref")
+]
+
+int_template="""
+#ifndef crypto_{n}_h
+#define crypto_{n}_h
+#include <stdint.h>
+
+typedef {n}_t crypto_{n};
+
+#endif
+"""
 
 def build_so():
+    for size in [8,16,32,64]:
+        for s in ['', 'u']:
+            write_template("target/include", "crypto_{n}.h",
+                int_template, dict(n="{}int{}".format(s, size)))
+    includes = [source_path("include"), "target/include"]
     for primitive in primitives:
-        primitive.build()
+        primitive.build(includes)
     makedirs("target/lib")
     run("cc", "-shared", "-Wl,-soname,libbletchleyprimitives.so.1",
         "-o", "target/lib/libbletchleyprimitives.so.1.0.1",
@@ -185,12 +221,13 @@ def build_so():
         os.unlink("target/lib/libbletchleyprimitives.so")
     os.symlink("libbletchleyprimitives.so.1.0.1",
         "target/lib/libbletchleyprimitives.so")
+    return includes
 
-def build_c_test():
+def build_c_test(includes):
     makedirs("target/obj")
     run("cc", "-Wall", "-std=c99",
         "-o", "target/obj/call-test.o",
-        [['-I', p.target_dir("include")] for p in primitives],
+        [['-I', i] for i in includes],
         "-c", "src/main/c/call-test.c")
     makedirs("target/exe")
     run("cc",
@@ -200,8 +237,8 @@ def build_c_test():
         "-lbletchleyprimitives")
 
 def build():
-    build_so()
-    build_c_test()
+    includes = build_so()
+    build_c_test(includes)
 
 if __name__ == "__main__":
     main()
