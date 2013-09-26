@@ -92,9 +92,8 @@ class Primitive(object):
             for macro in macros)
 
     def write_template(self, d, namepattern, template, substitutions):
-        target_dir = self.target_dir(d)
-        makedirs(target_dir)
-        name = os.path.join(target_dir, 
+        makedirs(self.target_dir(d))
+        name = self.target_dir(d,
             namepattern.format(**substitutions))
         print "Writing", name
         with open(name, "w") as f:
@@ -125,33 +124,33 @@ class Primitive(object):
             "extern int {op}{prototype};".format(
                 **dict(substitutions, prototype=prototype))
             for prototype in self.ops("prototypes"))
-        self.write_template("include", 
+        self.write_template("include",
             "{o}.h", o_header, substitutions)
-        self.write_template("include", 
+        self.write_template("include",
             "{op}.h", op_header, substitutions)
-        self.write_template("include", 
+        self.write_template("include",
             "cffi_{op}.h", cffi_op_header, substitutions)
-        self.write_template("c", 
+        self.write_template("c",
             "cffi_constants.c", cffi_constants, substitutions)
 
     def compile_c(self, name, source):
         run("cc", "-fpic", "-Wall",
             "-I", self.target_dir("include"),
             "-c",
-            "-o",  os.path.join(self.target_dir("obj"), name + ".o"), source)
+            "-o",  self.target_dir("obj", name + ".o"), source)
 
     def build(self):
         self.write_templates()
-        obj = os.path.join(self.target_dir(), "obj")
+        obj = self.target_dir("obj")
         makedirs(obj)
         for name in self._cfiles:
             self.compile_c(name, self.source_dir(name + ".c"))
-        self.compile_c("cffi_constants", 
+        self.compile_c("cffi_constants",
             self.target_dir("c", "cffi_constants.c"))
 
     def object_files(self):
         for name in self._cfiles + ["cffi_constants"]:
-            yield os.path.join(self.target_dir(), "obj", name + ".o")
+            yield self.target_dir("obj", name + ".o")
 
 class SalsaCore(Primitive):
     _ptype = "crypto_core"
@@ -166,8 +165,9 @@ def _gather_objfiles(primitives):
         for o in primitive.object_files():
             yield o
 
+primitives = [SalsaCore()]
+
 def build_so():
-    primitives = [SalsaCore()]
     for primitive in primitives:
         primitive.build()
     makedirs("target/lib")
@@ -185,6 +185,7 @@ def build_c_test():
     makedirs("target/obj")
     run("cc", "-Wall", "-std=c99",
         "-o", "target/obj/call-test.o",
+        [['-I', p.target_dir("include")] for p in primitives],
         "-c", "src/main/c/call-test.c")
     makedirs("target/exe")
     run("cc",
