@@ -23,64 +23,15 @@ def read_operations():
 
 operations = dict(read_operations())
 
-op_header = """#ifndef {op}_H
-#define {op}_H
-
-{apisubst}
-#ifdef __cplusplus
-extern "C" {{
-#endif
-{prototypes}
-#ifdef __cplusplus
-}}
-#endif
-
-#define {op}_IMPLEMENTATION "{o}/{p}/{i}"
-#ifndef {op}_VERSION
-#define {op}_VERSION "-"
-#endif
-
-#endif
-"""
-
-o_header = """#ifndef {o}_H
-#define {o}_H
-
-#include "{op}.h"
-
-{op_macros}
-
-{o_macros}
-#define {o}_PRIMITIVE "{p}"
-#define {o}_IMPLEMENTATION {op}_IMPLEMENTATION
-
-#endif
-"""
-
-cffi_op_header = """
-{cffi_declarations}
-extern char *cffi_{op}_IMPLEMENTATION;
-extern char *cffi_{op}_VERSION;
-
-{prototypes}
-"""
-
-cffi_constants = """
-#include "{op}.h"
-#include "cffi_{op}.h"
-
-{cffi_definitions}
-char *cffi_{op}_IMPLEMENTATION = {op}_IMPLEMENTATION;
-char *cffi_{op}_VERSION = {op}_VERSION;
-"""
-
 def write_template(d, namepattern, template, substitutions):
     makedirs(d)
     name = os.path.join(d,
         namepattern.format(**substitutions))
     print "Writing", name
-    with open(name, "w") as f:
-        f.write(template.format(**substitutions))
+    
+    with open(os.path.join("src/main/templates", template)) as t:
+        with open(name, "w") as f:
+            f.write(t.read().format(**substitutions))
 
 class CState(object):
     def __init__(self):
@@ -156,13 +107,13 @@ class Primitive(object):
                 **dict(substitutions, prototype=prototype))
             for prototype in self.ops("prototypes"))
         write_template("target/include/bletchley/primitives", 
-            "{op}.h", op_header, substitutions)
+            "{op}.h", "op.h", substitutions)
         write_template("target/lib/cffi_headers/bletchley/primitives", 
-            "cffi_{op}.h", cffi_op_header, substitutions)
+            "cffi_{op}.h", "cffi_op.h", substitutions)
         write_template(self.target_dir("include"), "{o}.h",
-            o_header, substitutions)
+            "o.h", substitutions)
         write_template(self.target_dir("c"), "cffi_constants.c",
-            cffi_constants, substitutions)
+            "cffi_constants.c", substitutions)
 
     def compile_c(self, cstate, name, source, extra_includes = []):
         cstate.compile_c(self.target_dir("obj", name + ".o"), source,
@@ -195,21 +146,11 @@ primitives = [
     Primitive("crypto_sign", "ed25519", "ref")
 ]
 
-int_template="""
-#ifndef crypto_{n}_h
-#define crypto_{n}_h
-#include <stdint.h>
-
-typedef {n}_t crypto_{n};
-
-#endif
-"""
-
 def build_so():
     for size in [8,16,32,64]:
         for s in ['', 'u']:
             write_template("target/build/include", "crypto_{n}.h",
-                int_template, dict(n="{}int{}".format(s, size)))
+                "crypto_n.h", dict(n="{}int{}".format(s, size)))
     cstate = CState()
     cstate.add_include("src/main/include")
     cstate.add_include(source_path("include"))
