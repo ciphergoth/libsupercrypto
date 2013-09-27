@@ -4,7 +4,7 @@ import cffi
 
 ffi = cffi.FFI()
 
-with open("target/crypto_core/salsa20/ref/include/cffi_crypto_core_salsa20.h") as f:
+with open("target/lib/cffi_headers/bletchley/primitives/cffi_crypto_core_salsa20.h") as f:
     ffi.cdef(f.read())
 
 blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")

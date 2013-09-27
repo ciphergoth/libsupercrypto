@@ -23,20 +23,6 @@ def read_operations():
 
 operations = dict(read_operations())
 
-o_header = """#ifndef {o}_H
-#define {o}_H
-
-#include "{op}.h"
-
-{op_macros}
-
-{o_macros}
-#define {o}_PRIMITIVE "{p}"
-#define {o}_IMPLEMENTATION {op}_IMPLEMENTATION
-
-#endif
-"""
-
 op_header = """#ifndef {op}_H
 #define {op}_H
 
@@ -53,6 +39,20 @@ extern "C" {{
 #ifndef {op}_VERSION
 #define {op}_VERSION "-"
 #endif
+
+#endif
+"""
+
+o_header = """#ifndef {o}_H
+#define {o}_H
+
+#include "{op}.h"
+
+{op_macros}
+
+{o_macros}
+#define {o}_PRIMITIVE "{p}"
+#define {o}_IMPLEMENTATION {op}_IMPLEMENTATION
 
 #endif
 """
@@ -90,9 +90,9 @@ class CState(object):
     def add_include(self, i):
         self._includes.append(i)
 
-    def compile_c(self, objfile, source):
+    def compile_c(self, objfile, source, extra_includes = []):
         run("cc", "-fpic", "-Wall", '-std=gnu99',
-            [['-I', i] for i in self._includes],
+            [['-I', i] for i in self._includes + extra_includes],
             "-o", objfile,
             "-c", source)
         self._objfiles.append(objfile)
@@ -130,10 +130,6 @@ class Primitive(object):
             template.format(**dict(substitutions, macro=macro))
             for macro in macros)
 
-    def write_template(self, d, namepattern, template, substitutions):
-        write_template(self.target_dir(d),
-            namepattern, template, substitutions)
-
     def write_templates(self):
         substitutions = dict(
             o=self._operation,
@@ -159,17 +155,18 @@ class Primitive(object):
             "extern int {op}{prototype};".format(
                 **dict(substitutions, prototype=prototype))
             for prototype in self.ops("prototypes"))
-        self.write_template("include", "{o}.h",
+        write_template("target/include/bletchley/primitives", 
+            "{op}.h", op_header, substitutions)
+        write_template("target/lib/cffi_headers/bletchley/primitives", 
+            "cffi_{op}.h", cffi_op_header, substitutions)
+        write_template(self.target_dir("include"), "{o}.h",
             o_header, substitutions)
-        self.write_template("include", "{op}.h",
-            op_header, substitutions)
-        self.write_template("include", "cffi_{op}.h",
-            cffi_op_header, substitutions)
-        self.write_template("c", "cffi_constants.c",
+        write_template(self.target_dir("c"), "cffi_constants.c",
             cffi_constants, substitutions)
 
-    def compile_c(self, cstate, name, source):
-        cstate.compile_c(self.target_dir("obj", name + ".o"), source)
+    def compile_c(self, cstate, name, source, extra_includes = []):
+        cstate.compile_c(self.target_dir("obj", name + ".o"), source,
+            [self.target_dir("include")] + extra_includes)
 
     def unsorted_cfiles(self):
         for fname in os.listdir(self.source_dir()):
@@ -181,14 +178,14 @@ class Primitive(object):
         return sorted(list(self.unsorted_cfiles()))
 
     def build(self, cstate):
-        cstate.add_include(self.target_dir("include"))
         self.write_templates()
         obj = self.target_dir("obj")
         makedirs(obj)
         for name in self.cfiles():
             self.compile_c(cstate, name, self.source_dir(name + ".c"))
         self.compile_c(cstate, "cffi_constants",
-            self.target_dir("c", "cffi_constants.c"))
+            self.target_dir("c", "cffi_constants.c"),
+            ["target/lib/cffi_headers/bletchley/primitives"])
 
 primitives = [
     Primitive("crypto_core", "salsa20", "ref"),
@@ -211,14 +208,16 @@ typedef {n}_t crypto_{n};
 def build_so():
     for size in [8,16,32,64]:
         for s in ['', 'u']:
-            write_template("target/include", "crypto_{n}.h",
+            write_template("target/build/include", "crypto_{n}.h",
                 int_template, dict(n="{}int{}".format(s, size)))
     cstate = CState()
     cstate.add_include("src/main/include")
     cstate.add_include(source_path("include"))
-    cstate.add_include("target/include")
+    cstate.add_include("target/include/bletchley/primitives")
+    cstate.add_include("target/build/include")
     makedirs("target/obj")
-    cstate.compile_c("target/obj/randombytes.o", "src/main/c/randombytes.c")
+    cstate.compile_c("target/obj/randombytes.o",
+        "src/main/c/randombytes.c")
     for primitive in primitives:
         primitive.build(cstate)
     makedirs("target/lib")
@@ -231,9 +230,10 @@ def build_so():
         os.unlink("target/lib/libbletchleyprimitives.so")
     os.symlink("libbletchleyprimitives.so.1.0.1",
         "target/lib/libbletchleyprimitives.so")
-    return cstate
 
-def build_c_test(cstate):
+def build_c_test():
+    cstate = CState()
+    cstate.add_include("target/include/bletchley/primitives")
     makedirs("target/obj")
     cstate.compile_c("target/obj/call-test.o", "src/test/c/call-test.c")
     makedirs("target/exe")
@@ -244,8 +244,8 @@ def build_c_test(cstate):
         "-lbletchleyprimitives")
 
 def build():
-    cstate = build_so()
-    build_c_test(cstate)
+    build_so()
+    build_c_test()
 
 if __name__ == "__main__":
     main()
