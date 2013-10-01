@@ -9,7 +9,7 @@ import hashlib
 import urllib2
 import shutil
 
-from fabricate import *
+import fabricate
 
 def makedirs(d):
     if not os.path.isdir(d):
@@ -37,7 +37,7 @@ def write_template(d, namepattern, template, substitutions):
     name = os.path.join(d,
         namepattern.format(**substitutions))
     print "Writing", name
-    
+
     with open(os.path.join("src/main/templates", template)) as t:
         with open(name, "w") as f:
             f.write(t.read().format(**substitutions))
@@ -51,7 +51,8 @@ class CState(object):
         self._includes.append(i)
 
     def compile_c(self, objfile, source, extra_includes = []):
-        run("cc", "-fpic", "-Wall", '-std=gnu99',
+        fabricate.run("cc",
+            "-fpic", "-Wall", '-std=gnu99',
             [['-I', i] for i in self._includes + extra_includes],
             "-o", objfile,
             "-c", source)
@@ -115,9 +116,9 @@ class Primitive(object):
             "extern int {op}{prototype};".format(
                 **dict(substitutions, prototype=prototype))
             for prototype in self.ops("prototypes"))
-        write_template("target/include/bletchley/primitives", 
+        write_template("target/include/bletchley/primitives",
             "{op}.h", "op.h", substitutions)
-        write_template("target/lib/cffi_headers/bletchley/primitives", 
+        write_template("target/lib/cffi_headers/bletchley/primitives",
             "cffi_{op}.h", "cffi_op.h", substitutions)
         write_template(self.target_dir("include"), "{o}.h",
             "o.h", substitutions)
@@ -156,7 +157,7 @@ primitives = [
 ]
 
 def copy_and_hash(h, fsrc, fdst, length=16*1024):
-    """copy data from file-like object fsrc to file-like object fdst, 
+    """copy data from file-like object fsrc to file-like object fdst,
        updating hash as we go along"""
     while 1:
         buf = fsrc.read(length)
@@ -221,10 +222,11 @@ def build_so():
     for primitive in primitives:
         primitive.build(cstate)
     makedirs("target/lib")
-    run("cc", "-shared", "-Wl,-soname,libbletchleyprimitives.so.1",
+    fabricate.run("cc",
+        "-shared", "-Wl,-soname,libbletchleyprimitives.so.1",
         "-o", "target/lib/libbletchleyprimitives.so.1.0.1",
         *cstate.objfiles())
-    run("ldconfig", "-n", "target/lib")
+    fabricate.run("ldconfig", "-n", "target/lib")
     # Is this really correct?
     if os.path.exists("target/lib/libbletchleyprimitives.so"):
         os.unlink("target/lib/libbletchleyprimitives.so")
@@ -237,7 +239,7 @@ def build_c_test():
     makedirs("target/obj")
     cstate.compile_c("target/obj/call-test.o", "src/test/c/call-test.c")
     makedirs("target/exe")
-    run("cc",
+    fabricate.run("cc",
         "-o", "target/exe/call-test",
         "target/obj/call-test.o",
         "-L", "target/lib",
@@ -249,4 +251,4 @@ def build():
     build_c_test()
 
 if __name__ == "__main__":
-    main()
+    fabricate.main()
