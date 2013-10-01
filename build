@@ -4,16 +4,13 @@ import sys
 import os
 import os.path
 import re
-import tempfile
 import subprocess
-import hashlib
-import urllib2
-import shutil
 
 sys.path.append(os.path.join(
     os.path.dirname(__file__), "src/build/python"))
 
 import fabricate
+import hashfetch
 
 def makedirs(d):
     if not os.path.isdir(d):
@@ -160,44 +157,13 @@ primitives = [
     Primitive("crypto_sign", "ed25519", "ref")
 ]
 
-def copy_and_hash(h, fsrc, fdst, length=16*1024):
-    """copy data from file-like object fsrc to file-like object fdst,
-       updating hash as we go along"""
-    while 1:
-        buf = fsrc.read(length)
-        if not buf:
-            break
-        h.update(buf)
-        fdst.write(buf)
-
-def fetch_and_hash(url, hexdigest, target):
-    print "Fetching:", url
-    tempdir = tempfile.mkdtemp()
-    try:
-        name = os.path.basename(target)
-        fetch = os.path.join(tempdir, name)
-        uf = urllib2.urlopen(url)
-        try:
-            with open(fetch, "w") as t:
-                h = hashlib.sha256()
-                copy_and_hash(h, uf, t)
-                if h.hexdigest() != hexdigest:
-                    print "Expected:", hexdigest
-                    print "Got:", h.hexdigest()
-                    raise Exception("Digest mismatch")
-        finally:
-            uf.close() # Doesn't bloody support "with"!
-        os.rename(fetch, target)
-    finally:
-        shutil.rmtree(tempdir)
-
 def fetch_dependency(name, url, hexdigest):
     dirtarget = os.path.join("fetched", name)
     if os.path.isdir(dirtarget):
         return
     archivename = name + ".tar.bz2"
     makedirs("fetched")
-    archive = fetch_and_hash(url, hexdigest,
+    archive = hashfetch.fetch_and_hash(url, hexdigest,
         os.path.join("fetched", archivename))
     subprocess.check_call(['tar', 'xvjf', archivename],
         cwd="fetched")
