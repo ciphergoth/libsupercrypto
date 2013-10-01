@@ -170,10 +170,11 @@ def copy_and_hash(h, fsrc, fdst, length=16*1024):
         h.update(buf)
         fdst.write(buf)
 
-def fetch_from_url(name, url, hexdigest):
+def fetch_and_hash(url, hexdigest, target):
     print "Fetching:", url
     tempdir = tempfile.mkdtemp()
     try:
+        name = os.path.basename(target)
         fetch = os.path.join(tempdir, name)
         uf = urllib2.urlopen(url)
         try:
@@ -186,8 +187,7 @@ def fetch_from_url(name, url, hexdigest):
                     raise Exception("Digest mismatch")
         finally:
             uf.close() # Doesn't bloody support "with"!
-        makedirs("fetched")
-        os.rename(fetch, os.path.join("fetched", name))
+        os.rename(fetch, target)
     finally:
         shutil.rmtree(tempdir)
 
@@ -196,7 +196,9 @@ def fetch_dependency(name, url, hexdigest):
     if os.path.isdir(dirtarget):
         return
     archivename = name + ".tar.bz2"
-    archive = fetch_from_url(archivename, url, hexdigest)
+    makedirs("fetched")
+    archive = fetch_and_hash(url, hexdigest,
+        os.path.join("fetched", archivename))
     subprocess.check_call(['tar', 'xvjf', archivename],
         cwd="fetched")
 
