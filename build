@@ -4,6 +4,7 @@ import sys
 import os
 import os.path
 import re
+import shutil
 import subprocess
 
 sys.path.append(os.path.join(
@@ -11,6 +12,10 @@ sys.path.append(os.path.join(
 
 import fabricate
 import hashfetch
+
+def rmtree(d):
+    if os.path.exists(d):
+        shutil.rmtree(d)
 
 def makedirs(d):
     if not os.path.isdir(d):
@@ -75,7 +80,7 @@ class Primitive(object):
             self._implementation)
 
     def target_dir(self, *args):
-        return os.path.join("target", self.spath(), *args)
+        return os.path.join("target/build", self.spath(), *args)
 
     def source_dir(self, *args):
         return source_path(self.spath(), *args)
@@ -151,6 +156,7 @@ class Primitive(object):
 
 primitives = [
     Primitive("crypto_core", "salsa20", "ref"),
+    Primitive("crypto_stream", "chacha12", "krovetz"),
     Primitive("crypto_verify", "32", "ref"),
     Primitive("crypto_hashblocks", "sha512", "ref"),
     Primitive("crypto_hash", "sha512", "ref"),
@@ -162,11 +168,12 @@ def fetch_dependency(name, url, hexdigest):
     if os.path.isdir(dirtarget):
         return
     archivename = name + ".tar.bz2"
-    makedirs("fetched")
+    makedirs("fetched/unpack")
     archive = hashfetch.fetch_and_hash(url, hexdigest,
         os.path.join("fetched", archivename))
-    subprocess.check_call(['tar', 'xvjf', archivename],
-        cwd="fetched")
+    subprocess.check_call(['tar', 'xvjf', os.path.join("..", archivename)],
+        cwd="fetched/unpack")
+    os.rename(os.path.join("fetched/unpack", name), dirtarget)
 
 def fetch_dependencies():
     fetch_dependency(
@@ -179,6 +186,9 @@ def fetch_dependencies():
         "4f277f89735c8b0b8a6bbd043b3efb3fa1cc68a9a5da6a076507d067fc3b3bf8")
 
 def build_so():
+    rmtree("target/build/include")
+    rmtree("target/include/bletchley/primitives")
+    rmtree("target/lib/cffi_headers/bletchley/primitives")
     for size in [8,16,32,64]:
         for s in ['', 'u']:
             write_template("target/build/include", "crypto_{n}.h",
