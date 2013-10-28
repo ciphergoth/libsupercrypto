@@ -1,40 +1,43 @@
 #!/usr/bin/env python2.7
 
-import cffi
+import bletchley_primitive
+ffi = bletchley_primitive.ffi
 
-ffi = cffi.FFI()
+def alloc(size):
+    return ffi.new("unsigned char[]", size)
 
-for primitive in ["crypto_core_salsa20", "crypto_stream_chacha12", "crypto_sign_ed25519"]:
-    with open("target/lib/cffi_headers/bletchley/primitives/cffi_{}.h".format(
-        primitive)) as f:
-        ffi.cdef(f.read())
+def printbytes(output):
+    print " ".join(["%02x" % b for b in output])
 
-blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")
+salsa20 = bletchley_primitive.Primitive("crypto_core", "salsa20")
+print salsa20
+print salsa20.const.OUTPUTBYTES
+key = alloc([0x80] + 31*[0])
+inpt = alloc(32*[0])
+sigma = alloc("expand 32-byte k")
+output = alloc(salsa20.const.OUTPUTBYTES)
+salsa20(output, inpt, key, sigma);
+printbytes(output)
 
-print blib.cffi_crypto_core_salsa20_OUTPUTBYTES
-print ffi.string(blib.cffi_crypto_core_salsa20_IMPLEMENTATION)
-print ffi.string(blib.cffi_crypto_core_salsa20_VERSION)
-key = ffi.new("unsigned char[]", [0x80] + 31*[0])
-inpt = ffi.new("unsigned char[]", 32*[0])
-sigma = ffi.new("unsigned char[]", "expand 32-byte k")
-output = ffi.new("unsigned char[]", 64)
-blib.crypto_core_salsa20(output, inpt, key, sigma);
-print " ".join(["%02x" % b for b in output])
-
-print ffi.string(blib.cffi_crypto_stream_chacha12_IMPLEMENTATION)
-print ffi.string(blib.cffi_crypto_stream_chacha12_VERSION)
+chacha12 = bletchley_primitive.Primitive("crypto_stream", "chacha12")
+print chacha12
 key = ffi.new("unsigned char[]",
-    [0] * blib.cffi_crypto_stream_chacha12_KEYBYTES)
+    [0] * chacha12.const.KEYBYTES)
 nonce = ffi.new("unsigned char[]",
-    [0] * blib.cffi_crypto_stream_chacha12_NONCEBYTES)
+    [0] * chacha12.const.NONCEBYTES)
 output_size = 128
-output = ffi.new("unsigned char[]", output_size)
-blib.crypto_stream_chacha12(output, output_size, nonce, key);
+output = alloc(output_size)
+chacha12(output, output_size, nonce, key);
+
+printbytes(output)
+
 print " ".join(["%02x" % b for b in output])
 
+ed25519 = bletchley_primitive.Primitive("crypto_sign", "ed25519")
+print ed25519
 secretkey = ffi.new("unsigned char[]",
-    [0] * blib.cffi_crypto_sign_ed25519_SECRETKEYBYTES)
+    [0] * ed25519.const.SECRETKEYBYTES)
 publickey = ffi.new("unsigned char[]",
-    [0] * blib.cffi_crypto_sign_ed25519_PUBLICKEYBYTES)
-blib.crypto_sign_ed25519_keypair(publickey, secretkey)
-print " ".join(["%02x" % b for b in publickey])
+    [0] * ed25519.const.PUBLICKEYBYTES)
+ed25519.keypair(publickey, secretkey)
+printbytes(publickey)
