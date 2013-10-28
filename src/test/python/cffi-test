@@ -4,10 +4,13 @@ import cffi
 
 ffi = cffi.FFI()
 
-with open("target/lib/cffi_headers/bletchley/primitives/cffi_crypto_core_salsa20.h") as f:
-    ffi.cdef(f.read())
+for primitive in ["crypto_core_salsa20", "crypto_stream_chacha12", "crypto_sign_ed25519"]:
+    with open("target/lib/cffi_headers/bletchley/primitives/cffi_{}.h".format(
+        primitive)) as f:
+        ffi.cdef(f.read())
 
 blib = ffi.dlopen("target/lib/libbletchleyprimitives.so.1")
+
 print blib.cffi_crypto_core_salsa20_OUTPUTBYTES
 print ffi.string(blib.cffi_crypto_core_salsa20_IMPLEMENTATION)
 print ffi.string(blib.cffi_crypto_core_salsa20_VERSION)
@@ -17,3 +20,21 @@ sigma = ffi.new("unsigned char[]", "expand 32-byte k")
 output = ffi.new("unsigned char[]", 64)
 blib.crypto_core_salsa20(output, inpt, key, sigma);
 print " ".join(["%02x" % b for b in output])
+
+print ffi.string(blib.cffi_crypto_stream_chacha12_IMPLEMENTATION)
+print ffi.string(blib.cffi_crypto_stream_chacha12_VERSION)
+key = ffi.new("unsigned char[]",
+    [0] * blib.cffi_crypto_stream_chacha12_KEYBYTES)
+nonce = ffi.new("unsigned char[]",
+    [0] * blib.cffi_crypto_stream_chacha12_NONCEBYTES)
+output_size = 128
+output = ffi.new("unsigned char[]", output_size)
+blib.crypto_stream_chacha12(output, output_size, nonce, key);
+print " ".join(["%02x" % b for b in output])
+
+secretkey = ffi.new("unsigned char[]",
+    [0] * blib.cffi_crypto_sign_ed25519_SECRETKEYBYTES)
+publickey = ffi.new("unsigned char[]",
+    [0] * blib.cffi_crypto_sign_ed25519_PUBLICKEYBYTES)
+blib.crypto_sign_ed25519_keypair(publickey, secretkey)
+print " ".join(["%02x" % b for b in publickey])
