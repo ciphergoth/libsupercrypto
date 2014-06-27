@@ -1,6 +1,0 @@
-target/
-fetched/
-\.deps
-.*\.pyc
-.*~
-.*\.orig
