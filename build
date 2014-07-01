@@ -22,7 +22,7 @@ def makedirs(d):
         os.makedirs(d)
 
 def source_path(*args):
-    return os.path.join("fetched/supercop-20130419", *args)
+    return os.path.join("fetched/supercop-20140529", *args)
 
 def read_operations():
     with open(source_path("OPERATIONS")) as f:
@@ -68,16 +68,16 @@ class CState(object):
         return self._objfiles
 
 class Primitive(object):
-    def __init__(self, operation, primitive, implementation):
+    def __init__(self, operation, primitive, impldir):
         self._operation = operation
         self._primitive = primitive
-        self._implementation = implementation
+        self._impldir = impldir
 
     def spath(self):
         return os.path.join(
             self._operation,
             self._primitive,
-            self._implementation)
+            self._impldir)
 
     def target_dir(self, *args):
         return os.path.join("target/build", self.spath(), *args)
@@ -99,9 +99,10 @@ class Primitive(object):
 
     def write_templates(self):
         substitutions = dict(
+            impldir=self._impldir,
             o=self._operation,
             p=self._primitive,
-            i=self._implementation)
+            i=self._impldir.replace("/", "_"))
         substitutions["op"] = "{o}_{p}".format(**substitutions)
         substitutions["opi"] = "{op}_{i}".format(**substitutions)
         macros = self.ops("macros") + ["_VERSION"]
@@ -156,7 +157,7 @@ class Primitive(object):
 
 primitives = [
     Primitive("crypto_core", "salsa20", "ref"),
-    Primitive("crypto_stream", "chacha12", "krovetz"),
+    Primitive("crypto_stream", "chacha12", "krovetz/vec128"),
     Primitive("crypto_verify", "32", "ref"),
     Primitive("crypto_hashblocks", "sha512", "ref"),
     Primitive("crypto_hash", "sha512", "ref"),
@@ -177,9 +178,9 @@ def fetch_dependency(name, url, hexdigest):
 
 def fetch_dependencies():
     fetch_dependency(
-        "supercop-20130419",
-        "http://hyperelliptic.org/ebats/supercop-20130419.tar.bz2",
-        "85a50eeb8d26ad2f99e5456a743d81f0dd05d45a8c38645902786b110bd4c4ee")
+        "supercop-20140529",
+        "http://hyperelliptic.org/ebats/supercop-20140529.tar.bz2",
+        "2173e29f38fc60ee0faf28290a5322204e901f680731a1ef17ae78ec5b9460e8")
     fetch_dependency(
         "nacl-20110221",
         "http://hyperelliptic.org/nacl/nacl-20110221.tar.bz2",

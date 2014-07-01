@@ -10,7 +10,7 @@ extern "C" {{
 }}
 #endif
 
-#define {op}_IMPLEMENTATION "{o}/{p}/{i}"
+#define {op}_IMPLEMENTATION "{o}/{p}/{impldir}"
 #ifndef {op}_VERSION
 #define {op}_VERSION "-"
 #endif
